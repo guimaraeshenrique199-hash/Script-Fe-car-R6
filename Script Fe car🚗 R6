@@ -1,0 +1,2413 @@
+--========================================================--
+--              🚗 HENRIQUE CAR SYSTEM 🚗
+--                 Script 2026❗️
+--                 🧱by henrique☢️
+--========================================================--
+
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+local TweenService = game:GetService("TweenService")
+local Debris = game:GetService("Debris")
+
+local Player = Players.LocalPlayer
+local PlayerGui = Player:WaitForChild("PlayerGui")
+
+--========================================================--
+-- CONFIG
+--========================================================--
+
+local NORMAL_SPEED = 60
+
+-- 🧊 DRIFT ORIGINAL
+local DRIFT_SPEED = 80
+local DRIFT_SLIDE = 2.8
+local DRIFT_MIN_SPEED = 25
+local DRIFT_TURN = 0.28
+
+-- ⚡ TURBO MAIS CONTROLADO
+local TURBO_SPEED = 1000
+local TURBO_ACCELERATION = 250
+local TURBO_DURATION = 6
+local TURBO_RECHARGE = 10
+
+-- CÂMERA
+local NORMAL_FOV = 70
+local TURBO_FOV = 105
+
+-- 💥 IMPACTO
+local IMPACT_MIN_SPEED = 25
+local IMPACT_FORCE = 70
+local IMPACT_UP_FORCE = 8
+local IMPACT_COOLDOWN = 0.45
+
+-- RASTROS
+local TIRE_MARK_WIDTH = 0.72
+local TIRE_MARK_LIFETIME = 7
+
+-- ANIMAÇÕES
+local R6_ANIMATION = "rbxassetid://129342287"
+local R15_ANIMATION = "rbxassetid://3360694441"
+
+--========================================================--
+-- ESTADO
+--========================================================--
+
+local Character
+local Humanoid
+local Root
+local Camera
+
+local Gui
+local Dashboard
+
+local SpeedText
+local GearText
+local StatusText
+
+local DriftButton
+local LightButton
+local CarButton
+local ImpactButton
+local TurboButton
+
+local ChargeBar
+local ChargeFill
+local ChargeText
+
+local ReverseLeft
+local ReverseRight
+
+local SmokeLeft
+local SmokeRight
+local TurboSmokeLeft
+local TurboSmokeRight
+
+local HeadLightLeft
+local HeadLightRight
+
+local CarEnabled = true
+local DriftEnabled = false
+local LightEnabled = false
+local ImpactEnabled = true
+
+local TurboActive = false
+local TurboCharge = 1
+local TurboReady = true
+
+local CurrentSpeed = 0
+local LastImpact = 0
+
+local PreviousLeftWheel
+local PreviousRightWheel
+
+local Connections = {}
+
+--========================================================--
+-- LIMPAR CONEXÕES
+--========================================================--
+
+local function disconnectAll()
+
+	for _, connection in ipairs(Connections) do
+		pcall(function()
+			connection:Disconnect()
+		end)
+	end
+
+	table.clear(Connections)
+end
+
+--========================================================--
+-- LIMPAR GUI
+--========================================================--
+
+local function destroyGui()
+
+	if Gui then
+		pcall(function()
+			Gui:Destroy()
+		end)
+	end
+
+	Gui = nil
+
+	local Old =
+		PlayerGui:FindFirstChild("HenriqueCarSystem")
+
+	if Old then
+		Old:Destroy()
+	end
+end
+
+--========================================================--
+-- LIMPAR EFEITOS
+--========================================================--
+
+local function destroyEffects()
+
+	if Character then
+
+		for _, Name in ipairs({
+			"HenriqueCarLights",
+			"HenriqueCarSmoke",
+			"HenriqueTurboSmoke"
+		}) do
+
+			local Object =
+				Character:FindFirstChild(Name)
+
+			if Object then
+				Object:Destroy()
+			end
+		end
+	end
+
+	ReverseLeft = nil
+	ReverseRight = nil
+
+	SmokeLeft = nil
+	SmokeRight = nil
+
+	TurboSmokeLeft = nil
+	TurboSmokeRight = nil
+end
+
+--========================================================--
+-- PERSONAGEM
+--========================================================--
+
+local function getCharacter()
+
+	Character =
+		Player.Character
+		or Player.CharacterAdded:Wait()
+
+	Humanoid =
+		Character:WaitForChild("Humanoid")
+
+	Root =
+		Character:WaitForChild("HumanoidRootPart")
+
+	Camera =
+		workspace.CurrentCamera
+end
+
+--========================================================--
+-- CONFIGURAR PERSONAGEM
+--========================================================--
+
+local function setupCharacter()
+
+	Humanoid.WalkSpeed = NORMAL_SPEED
+	Humanoid.JumpPower = 20
+	Humanoid.AutoRotate = true
+	Humanoid.UseJumpPower = true
+
+	if Humanoid.RigType ==
+		Enum.HumanoidRigType.R6 then
+
+		Humanoid.HipHeight = -0.72
+
+		local Animate =
+			Character:FindFirstChild("Animate")
+
+		if Animate then
+			pcall(function()
+
+				Animate.walk.WalkAnim.AnimationId =
+					R6_ANIMATION
+
+				Animate.run.RunAnim.AnimationId =
+					R6_ANIMATION
+
+				Animate.fall.FallAnim.AnimationId =
+					R6_ANIMATION
+
+				Animate.idle.Animation1.AnimationId =
+					R6_ANIMATION
+
+				Animate.idle.Animation2.AnimationId =
+					R6_ANIMATION
+
+				Animate.jump.JumpAnim.AnimationId =
+					R6_ANIMATION
+
+			end)
+		end
+
+	else
+
+		Humanoid.HipHeight = 0.72
+
+		local Animate =
+			Character:FindFirstChild("Animate")
+
+		if Animate then
+			pcall(function()
+
+				Animate.walk.WalkAnim.AnimationId =
+					R15_ANIMATION
+
+				Animate.run.RunAnim.AnimationId =
+					R15_ANIMATION
+
+				Animate.fall.FallAnim.AnimationId =
+					R15_ANIMATION
+
+				Animate.idle.Animation1.AnimationId =
+					R15_ANIMATION
+
+				Animate.idle.Animation2.AnimationId =
+					R15_ANIMATION
+
+				Animate.jump.JumpAnim.AnimationId =
+					R15_ANIMATION
+
+			end)
+		end
+	end
+
+	for _, Object in ipairs(
+		Character:GetDescendants()
+	) do
+
+		if Object:IsA("BasePart") then
+
+			pcall(function()
+
+				Object.CustomPhysicalProperties =
+					PhysicalProperties.new(
+						0.04,
+						0,
+						0,
+						1,
+						1
+					)
+
+			end)
+		end
+	end
+end
+
+--========================================================--
+-- BOTÃO
+--========================================================--
+
+local function buttonPress(Button)
+
+	local Scale =
+		Button:FindFirstChild("ButtonScale")
+
+	if not Scale then
+		return
+	end
+
+	TweenService:Create(
+		Scale,
+		TweenInfo.new(
+			0.055,
+			Enum.EasingStyle.Quad
+		),
+		{
+			Scale = 0.84
+		}
+	):Play()
+
+	task.delay(0.065, function()
+
+		if Scale and Scale.Parent then
+
+			TweenService:Create(
+				Scale,
+				TweenInfo.new(
+					0.12,
+					Enum.EasingStyle.Back
+				),
+				{
+					Scale = 1
+				}
+			):Play()
+
+		end
+	end)
+end
+
+--========================================================--
+-- CRIAR BOTÃO
+--========================================================--
+
+local function createButton(
+	Parent,
+	Name,
+	Text,
+	Size
+)
+
+	local Button =
+		Instance.new("TextButton")
+
+	Button.Name = Name
+
+	Button.Size =
+		Size
+		or UDim2.new(
+			0,
+			31,
+			0,
+			28
+		)
+
+	Button.BackgroundColor3 =
+		Color3.fromRGB(
+			245,
+			245,
+			245
+		)
+
+	Button.BackgroundTransparency = 0.15
+	Button.BorderSizePixel = 0
+
+	Button.Text = Text
+
+	Button.TextColor3 =
+		Color3.fromRGB(
+			15,
+			15,
+			15
+		)
+
+	Button.Font = Enum.Font.SciFi
+	Button.TextScaled = true
+	Button.AutoButtonColor = false
+	Button.Parent = Parent
+
+	local Corner =
+		Instance.new("UICorner")
+
+	Corner.CornerRadius =
+		UDim.new(0, 9)
+
+	Corner.Parent = Button
+
+	local Stroke =
+		Instance.new("UIStroke")
+
+	Stroke.Color =
+		Color3.fromRGB(
+			255,
+			255,
+			255
+		)
+
+	Stroke.Thickness = 1.5
+	Stroke.Parent = Button
+
+	local Scale =
+		Instance.new("UIScale")
+
+	Scale.Name = "ButtonScale"
+	Scale.Parent = Button
+
+	table.insert(
+		Connections,
+		Button.Activated:Connect(function()
+			buttonPress(Button)
+		end)
+	)
+
+	return Button
+end
+
+--========================================================--
+-- GUI
+--========================================================--
+
+local function createGui()
+
+	destroyGui()
+
+	Gui =
+		Instance.new("ScreenGui")
+
+	Gui.Name =
+		"HenriqueCarSystem"
+
+	Gui.ResetOnSpawn = false
+	Gui.IgnoreGuiInset = true
+	Gui.Parent = PlayerGui
+
+	--====================================================--
+	-- PAINEL
+	--====================================================--
+
+	Dashboard =
+		Instance.new("Frame")
+
+	Dashboard.AnchorPoint =
+		Vector2.new(0.5, 1)
+
+	Dashboard.Position =
+		UDim2.new(
+			0.5,
+			0,
+			1,
+			-18
+		)
+
+	Dashboard.Size =
+		UDim2.new(
+			0,
+			275,
+			0,
+			110
+		)
+
+	Dashboard.BackgroundColor3 =
+		Color3.fromRGB(
+			16,
+			16,
+			19
+		)
+
+	Dashboard.BackgroundTransparency = 0.12
+	Dashboard.BorderSizePixel = 0
+	Dashboard.Parent = Gui
+
+	local Corner =
+		Instance.new("UICorner")
+
+	Corner.CornerRadius =
+		UDim.new(0, 20)
+
+	Corner.Parent = Dashboard
+
+	local Stroke =
+		Instance.new("UIStroke")
+
+	Stroke.Color =
+		Color3.fromRGB(
+			255,
+			255,
+			255
+		)
+
+	Stroke.Transparency = 0.3
+	Stroke.Thickness = 2
+	Stroke.Parent = Dashboard
+
+	--====================================================--
+	-- VELOCÍMETRO
+	--====================================================--
+
+	SpeedText =
+		Instance.new("TextLabel")
+
+	SpeedText.BackgroundTransparency = 1
+
+	SpeedText.Position =
+		UDim2.new(
+			0,
+			10,
+			0,
+			5
+		)
+
+	SpeedText.Size =
+		UDim2.new(
+			0,
+			105,
+			0,
+			48
+		)
+
+	SpeedText.Font = Enum.Font.SciFi
+
+	SpeedText.Text = "000"
+
+	SpeedText.TextColor3 =
+		Color3.fromRGB(
+			255,
+			255,
+			255
+		)
+
+	SpeedText.TextScaled = true
+	SpeedText.Parent = Dashboard
+
+	local KMH =
+		Instance.new("TextLabel")
+
+	KMH.BackgroundTransparency = 1
+
+	KMH.Position =
+		UDim2.new(
+			0,
+			10,
+			0,
+			51
+		)
+
+	KMH.Size =
+		UDim2.new(
+			0,
+			105,
+			0,
+			16
+		)
+
+	KMH.Font = Enum.Font.SciFi
+	KMH.Text = "KM/H"
+
+	KMH.TextColor3 =
+		Color3.fromRGB(
+			180,
+			180,
+			180
+		)
+
+	KMH.TextScaled = true
+	KMH.Parent = Dashboard
+
+	--====================================================--
+	-- MARCHA
+	--====================================================--
+
+	GearText =
+		Instance.new("TextLabel")
+
+	GearText.BackgroundTransparency = 1
+
+	GearText.Position =
+		UDim2.new(
+			0,
+			117,
+			0,
+			9
+		)
+
+	GearText.Size =
+		UDim2.new(
+			0,
+			42,
+			0,
+			25
+		)
+
+	GearText.Font = Enum.Font.SciFi
+	GearText.Text = "N"
+
+	GearText.TextColor3 =
+		Color3.fromRGB(
+			255,
+			255,
+			255
+		)
+
+	GearText.TextScaled = true
+	GearText.Parent = Dashboard
+
+	StatusText =
+		Instance.new("TextLabel")
+
+	StatusText.BackgroundTransparency = 1
+
+	StatusText.Position =
+		UDim2.new(
+			0,
+			112,
+			0,
+			39
+		)
+
+	StatusText.Size =
+		UDim2.new(
+			0,
+			52,
+			0,
+			18
+		)
+
+	StatusText.Font = Enum.Font.SciFi
+	StatusText.Text = "IDLE"
+
+	StatusText.TextColor3 =
+		Color3.fromRGB(
+			180,
+			180,
+			180
+		)
+
+	StatusText.TextScaled = true
+	StatusText.Parent = Dashboard
+
+	--====================================================--
+	-- BOTÕES
+	--====================================================--
+
+	local Buttons =
+		Instance.new("Frame")
+
+	Buttons.BackgroundTransparency = 1
+
+	Buttons.Position =
+		UDim2.new(
+			1,
+			-92,
+			0,
+			7
+		)
+
+	Buttons.Size =
+		UDim2.new(
+			0,
+			82,
+			0,
+			65
+		)
+
+	Buttons.Parent = Dashboard
+
+	local Grid =
+		Instance.new("UIGridLayout")
+
+	Grid.CellSize =
+		UDim2.new(
+			0,
+			36,
+			0,
+			28
+		)
+
+	Grid.CellPadding =
+		UDim2.new(
+			0,
+			5,
+			0,
+			4
+		)
+
+	Grid.FillDirectionMaxCells = 2
+	Grid.Parent = Buttons
+
+	DriftButton =
+		createButton(
+			Buttons,
+			"DriftButton",
+			"🧊"
+		)
+
+	LightButton =
+		createButton(
+			Buttons,
+			"LightButton",
+			"💡"
+		)
+
+	CarButton =
+		createButton(
+			Buttons,
+			"CarButton",
+			"🚗"
+		)
+
+	ImpactButton =
+		createButton(
+			Buttons,
+			"ImpactButton",
+			"💥"
+		)
+
+	--====================================================--
+	-- TURBO
+	--====================================================--
+
+	TurboButton =
+		createButton(
+			Dashboard,
+			"TurboButton",
+			"⚡",
+			UDim2.new(
+				0,
+				57,
+				0,
+				47
+			)
+		)
+
+	TurboButton.Position =
+		UDim2.new(
+			0,
+			174,
+			0,
+			56
+		)
+
+	--====================================================--
+	-- BARRA
+	--====================================================--
+
+	ChargeBar =
+		Instance.new("Frame")
+
+	ChargeBar.Position =
+		UDim2.new(
+			0,
+			10,
+			1,
+			-13
+		)
+
+	ChargeBar.Size =
+		UDim2.new(
+			0,
+			150,
+			0,
+			6
+		)
+
+	ChargeBar.BackgroundColor3 =
+		Color3.fromRGB(
+			40,
+			40,
+			45
+		)
+
+	ChargeBar.BorderSizePixel = 0
+	ChargeBar.Parent = Dashboard
+
+	local ChargeCorner =
+		Instance.new("UICorner")
+
+	ChargeCorner.CornerRadius =
+		UDim.new(1, 0)
+
+	ChargeCorner.Parent = ChargeBar
+
+	ChargeFill =
+		Instance.new("Frame")
+
+	ChargeFill.Size =
+		UDim2.new(
+			1,
+			0,
+			1,
+			0
+		)
+
+	ChargeFill.BackgroundColor3 =
+		Color3.fromRGB(
+			0,
+			170,
+			255
+		)
+
+	ChargeFill.BorderSizePixel = 0
+	ChargeFill.Parent = ChargeBar
+
+	local FillCorner =
+		Instance.new("UICorner")
+
+	FillCorner.CornerRadius =
+		UDim.new(1, 0)
+
+	FillCorner.Parent = ChargeFill
+
+	ChargeText =
+		Instance.new("TextLabel")
+
+	ChargeText.BackgroundTransparency = 1
+
+	ChargeText.Position =
+		UDim2.new(
+			0,
+			165,
+			1,
+			-19
+		)
+
+	ChargeText.Size =
+		UDim2.new(
+			0,
+			65,
+			0,
+			17
+		)
+
+	ChargeText.Font = Enum.Font.SciFi
+	ChargeText.Text = "100%"
+
+	ChargeText.TextColor3 =
+		Color3.fromRGB(
+			0,
+			190,
+			255
+		)
+
+	ChargeText.TextScaled = true
+	ChargeText.Parent = Dashboard
+
+	--====================================================--
+	-- ASSINATURA
+	--====================================================--
+
+	local Signature =
+		Instance.new("TextLabel")
+
+	Signature.BackgroundTransparency = 1
+
+	Signature.Position =
+		UDim2.new(
+			0,
+			10,
+			0,
+			76
+		)
+
+	Signature.Size =
+		UDim2.new(
+			0,
+			130,
+			0,
+			15
+		)
+
+	Signature.Font = Enum.Font.SciFi
+
+	Signature.Text =
+		"🧱 by henrique ☢️"
+
+	Signature.TextColor3 =
+		Color3.fromRGB(
+			145,
+			145,
+			145
+		)
+
+	Signature.TextScaled = true
+	Signature.TextXAlignment =
+		Enum.TextXAlignment.Left
+
+	Signature.Parent = Dashboard
+end
+
+--========================================================--
+-- 💡 LUZES
+--========================================================--
+
+local function createLights()
+
+	local Folder =
+		Instance.new("Folder")
+
+	Folder.Name =
+		"HenriqueCarLights"
+
+	Folder.Parent = Character
+
+	local function makeHeadLight(Position)
+
+		local Attachment =
+			Instance.new("Attachment")
+
+		Attachment.Position = Position
+		Attachment.Parent = Root
+
+		local Light =
+			Instance.new("SpotLight")
+
+		Light.Brightness = 5
+		Light.Range = 55
+		Light.Angle = 55
+		Light.Shadows = true
+		Light.Enabled = false
+		Light.Parent = Attachment
+
+		return Light
+	end
+
+	local Left =
+		makeHeadLight(
+			Vector3.new(
+				-1.1,
+				0.25,
+				-2
+			)
+		)
+
+	local Right =
+		makeHeadLight(
+			Vector3.new(
+				1.1,
+				0.25,
+				-2
+			)
+		)
+
+	--====================================================--
+	-- 🔴 LUZES DE RÉ
+	--====================================================--
+
+	local ReverseFolder =
+		Instance.new("Folder")
+
+	ReverseFolder.Name =
+		"ReverseLights"
+
+	ReverseFolder.Parent = Folder
+
+	local function makeReverseLight(Position)
+
+		local Attachment =
+			Instance.new("Attachment")
+
+		Attachment.Position = Position
+		Attachment.Parent = Root
+
+		local Light =
+			Instance.new("PointLight")
+
+		Light.Color =
+			Color3.fromRGB(
+				255,
+				0,
+				0
+			)
+
+		Light.Brightness = 1.5
+		Light.Range = 5
+		Light.Shadows = false
+		Light.Enabled = false
+		Light.Parent = Attachment
+
+		local Lamp =
+			Instance.new("Part")
+
+		Lamp.Name =
+			"SmallRedReverseLamp"
+
+		-- um pouquinho maior
+		Lamp.Size =
+			Vector3.new(
+				0.38,
+				0.26,
+				0.10
+			)
+
+		Lamp.Color =
+			Color3.fromRGB(
+				255,
+				0,
+				0
+			)
+
+		Lamp.Material =
+			Enum.Material.Neon
+
+		-- INVISÍVEL FORA DA RÉ
+		Lamp.Transparency = 1
+
+		Lamp.CanCollide = false
+		Lamp.CanTouch = false
+		Lamp.CanQuery = false
+		Lamp.Massless = true
+
+		Lamp.CFrame =
+			Root.CFrame *
+			CFrame.new(Position)
+
+		Lamp.Parent = ReverseFolder
+
+		local Weld =
+			Instance.new("WeldConstraint")
+
+		Weld.Part0 = Root
+		Weld.Part1 = Lamp
+		Weld.Parent = Lamp
+
+		Lamp:SetAttribute(
+			"ReverseLight",
+			true
+		)
+
+		return Light
+	end
+
+	ReverseLeft =
+		makeReverseLight(
+			Vector3.new(
+				-0.9,
+				0.05,
+				1.85
+			)
+		)
+
+	ReverseRight =
+		makeReverseLight(
+			Vector3.new(
+				0.9,
+				0.05,
+				1.85
+			)
+		)
+
+	return Left, Right
+end
+
+--========================================================--
+-- 🔴 VISUAL DA RÉ
+--========================================================--
+
+local function setReverseVisual(Enabled)
+
+	local Folder =
+		Character
+		and Character:FindFirstChild(
+			"HenriqueCarLights"
+		)
+
+	if not Folder then
+		return
+	end
+
+	local ReverseFolder =
+		Folder:FindFirstChild(
+			"ReverseLights"
+		)
+
+	if not ReverseFolder then
+		return
+	end
+
+	for _, Object in ipairs(
+		ReverseFolder:GetChildren()
+	) do
+
+		if Object:IsA("Part")
+			and Object:GetAttribute(
+				"ReverseLight"
+			) then
+
+			Object.Transparency =
+				Enabled
+				and 0.05
+				or 1
+		end
+	end
+end
+
+--========================================================--
+-- RÉ
+--========================================================--
+
+local function updateReverseLights()
+
+	if not ReverseLeft
+		or not ReverseRight
+		or not Root then
+		return
+	end
+
+	local Velocity =
+		Root.AssemblyLinearVelocity
+
+	local Horizontal =
+		Vector3.new(
+			Velocity.X,
+			0,
+			Velocity.Z
+		)
+
+	local Reversing = false
+
+	if Horizontal.Magnitude > 4 then
+
+		local Forward =
+			Root.CFrame.LookVector
+
+		local Dot =
+			Horizontal.Unit:Dot(
+				Forward
+			)
+
+		Reversing =
+			Dot < -0.25
+	end
+
+	ReverseLeft.Enabled = Reversing
+	ReverseRight.Enabled = Reversing
+
+	setReverseVisual(Reversing)
+end
+
+--========================================================--
+-- 💨 FUMAÇA CINZA
+--========================================================--
+
+local function createSmoke()
+
+	local Folder =
+		Instance.new("Folder")
+
+	Folder.Name =
+		"HenriqueCarSmoke"
+
+	Folder.Parent = Character
+
+	local function makeSmoke(Position)
+
+		local SmokePart =
+			Instance.new("Part")
+
+		SmokePart.Name =
+			"SmokePoint"
+
+		SmokePart.Size =
+			Vector3.new(
+				0.35,
+				0.35,
+				0.35
+			)
+
+		SmokePart.Transparency = 1
+
+		SmokePart.CanCollide = false
+		SmokePart.CanTouch = false
+		SmokePart.CanQuery = false
+		SmokePart.Massless = true
+
+		SmokePart.CFrame =
+			Root.CFrame *
+			CFrame.new(Position)
+
+		SmokePart.Parent = Folder
+
+		local Weld =
+			Instance.new("WeldConstraint")
+
+		Weld.Part0 = Root
+		Weld.Part1 = SmokePart
+		Weld.Parent = SmokePart
+
+		local Smoke =
+			Instance.new("Smoke")
+
+		Smoke.Enabled = false
+
+		-- CINZA
+		Smoke.Color =
+			Color3.fromRGB(
+				150,
+				150,
+				150
+			)
+
+		Smoke.Opacity = 0.55
+		Smoke.RiseVelocity = 5
+		Smoke.Size = 4
+		Smoke.Parent = SmokePart
+
+		return Smoke
+	end
+
+	SmokeLeft =
+		makeSmoke(
+			Vector3.new(
+				-1.3,
+				-0.8,
+				1.25
+			)
+		)
+
+	SmokeRight =
+		makeSmoke(
+			Vector3.new(
+				1.3,
+				-0.8,
+				1.25
+			)
+		)
+end
+
+--========================================================--
+-- 💨 FUMAÇA TURBO
+--========================================================--
+
+local function createTurboSmoke()
+
+	local Folder =
+		Instance.new("Folder")
+
+	Folder.Name =
+		"HenriqueTurboSmoke"
+
+	Folder.Parent = Character
+
+	local function makeTurboSmoke(Position)
+
+		local SmokePart =
+			Instance.new("Part")
+
+		SmokePart.Name =
+			"TurboSmokePoint"
+
+		SmokePart.Size =
+			Vector3.new(
+				0.45,
+				0.45,
+				0.45
+			)
+
+		SmokePart.Transparency = 1
+
+		SmokePart.CanCollide = false
+		SmokePart.CanTouch = false
+		SmokePart.CanQuery = false
+		SmokePart.Massless = true
+
+		SmokePart.CFrame =
+			Root.CFrame *
+			CFrame.new(Position)
+
+		SmokePart.Parent = Folder
+
+		local Weld =
+			Instance.new("WeldConstraint")
+
+		Weld.Part0 = Root
+		Weld.Part1 = SmokePart
+		Weld.Parent = SmokePart
+
+		local Smoke =
+			Instance.new("Smoke")
+
+		Smoke.Enabled = false
+
+		-- CINZA
+		Smoke.Color =
+			Color3.fromRGB(
+				130,
+				130,
+				130
+			)
+
+		Smoke.Opacity = 0.75
+		Smoke.RiseVelocity = 7
+		Smoke.Size = 7
+		Smoke.Parent = SmokePart
+
+		return Smoke
+	end
+
+	TurboSmokeLeft =
+		makeTurboSmoke(
+			Vector3.new(
+				-1.15,
+				-0.75,
+				1.7
+			)
+		)
+
+	TurboSmokeRight =
+		makeTurboSmoke(
+			Vector3.new(
+				1.15,
+				-0.75,
+				1.7
+			)
+		)
+end
+
+--========================================================--
+-- LUZES
+--========================================================--
+
+local function updateLights()
+
+	if not HeadLightLeft
+		or not HeadLightRight then
+		return
+	end
+
+	local Enabled =
+		LightEnabled
+		and CarEnabled
+
+	HeadLightLeft.Enabled = Enabled
+	HeadLightRight.Enabled = Enabled
+
+	LightButton.Text =
+		LightEnabled
+		and "🔆"
+		or "💡"
+end
+
+--========================================================--
+-- FUMAÇA
+--========================================================--
+
+local function updateSmoke()
+
+	local DriftSmoke =
+		CarEnabled
+		and DriftEnabled
+		and CurrentSpeed >= DRIFT_MIN_SPEED
+
+	if SmokeLeft then
+		SmokeLeft.Enabled = DriftSmoke
+	end
+
+	if SmokeRight then
+		SmokeRight.Enabled = DriftSmoke
+	end
+
+	local TurboSmoke =
+		TurboActive
+		and CarEnabled
+
+	if TurboSmokeLeft then
+		TurboSmokeLeft.Enabled = TurboSmoke
+	end
+
+	if TurboSmokeRight then
+		TurboSmokeRight.Enabled = TurboSmoke
+	end
+end
+
+--========================================================--
+-- DRIFT
+--========================================================--
+
+local function isSharpTurn()
+
+	if not Root then
+		return false
+	end
+
+	local Velocity =
+		Root.AssemblyLinearVelocity
+
+	local Flat =
+		Vector3.new(
+			Velocity.X,
+			0,
+			Velocity.Z
+		)
+
+	if Flat.Magnitude < DRIFT_MIN_SPEED then
+		return false
+	end
+
+	local Side =
+		Root.CFrame.RightVector
+
+	local SideAmount =
+		math.abs(
+			Flat.Unit:Dot(Side)
+		)
+
+	return SideAmount > DRIFT_TURN
+end
+
+--========================================================--
+-- RASTRO DAS RODAS
+--========================================================--
+
+local function getGround(Position)
+
+	local Params =
+		RaycastParams.new()
+
+	Params.FilterType =
+		Enum.RaycastFilterType.Exclude
+
+	Params.FilterDescendantsInstances = {
+		Character
+	}
+
+	local Result =
+		workspace:Raycast(
+			Position +
+			Vector3.new(0, 4, 0),
+
+			Vector3.new(
+				0,
+				-15,
+				0
+			),
+
+			Params
+		)
+
+	if Result then
+		return Result.Position
+	end
+
+	return nil
+end
+
+local function createTrailSegment(From, To)
+
+	if not From or not To then
+		return
+	end
+
+	local Distance =
+		(From - To).Magnitude
+
+	if Distance < 0.03 then
+		return
+	end
+
+	local Mark =
+		Instance.new("Part")
+
+	Mark.Name =
+		"HenriqueTireTrail"
+
+	Mark.Anchored = true
+	Mark.CanCollide = false
+	Mark.CanTouch = false
+	Mark.CanQuery = false
+
+	Mark.Material =
+		Enum.Material.SmoothPlastic
+
+	Mark.Color =
+		Color3.fromRGB(
+			12,
+			12,
+			12
+		)
+
+	Mark.Transparency = 0.08
+
+	Mark.Size =
+		Vector3.new(
+			TIRE_MARK_WIDTH,
+			0.035,
+			Distance + 0.15
+		)
+
+	Mark.CFrame =
+		CFrame.lookAt(
+			(From + To) / 2 +
+			Vector3.new(
+				0,
+				0.018,
+				0
+			),
+			To
+		)
+
+	Mark.Parent = workspace
+
+	TweenService:Create(
+		Mark,
+		TweenInfo.new(
+			TIRE_MARK_LIFETIME,
+			Enum.EasingStyle.Linear
+		),
+		{
+			Transparency = 1
+		}
+	):Play()
+
+	Debris:AddItem(
+		Mark,
+		TIRE_MARK_LIFETIME + 0.2
+	)
+end
+
+local function updateTireTrail()
+
+	if not Root then
+		return
+	end
+
+	if not DriftEnabled then
+
+		PreviousLeftWheel = nil
+		PreviousRightWheel = nil
+
+		return
+	end
+
+	if CurrentSpeed < DRIFT_MIN_SPEED then
+		return
+	end
+
+	if not isSharpTurn() then
+
+		PreviousLeftWheel = nil
+		PreviousRightWheel = nil
+
+		return
+	end
+
+	local Right =
+		Root.CFrame.RightVector
+
+	local Forward =
+		Root.CFrame.LookVector
+
+	local LeftWheel =
+		Root.Position
+		- Right * 1.15
+		+ Forward * 0.7
+
+	local RightWheel =
+		Root.Position
+		+ Right * 1.15
+		+ Forward * 0.7
+
+	local LeftGround =
+		getGround(LeftWheel)
+
+	local RightGround =
+		getGround(RightWheel)
+
+	if not LeftGround
+		or not RightGround then
+		return
+	end
+
+	if PreviousLeftWheel then
+
+		if (
+			LeftGround -
+			PreviousLeftWheel
+		).Magnitude < 6 then
+
+			createTrailSegment(
+				PreviousLeftWheel,
+				LeftGround
+			)
+		end
+	end
+
+	if PreviousRightWheel then
+
+		if (
+			RightGround -
+			PreviousRightWheel
+		).Magnitude < 6 then
+
+			createTrailSegment(
+				PreviousRightWheel,
+				RightGround
+			)
+		end
+	end
+
+	PreviousLeftWheel = LeftGround
+	PreviousRightWheel = RightGround
+end
+
+--========================================================--
+-- TURBO UI
+--========================================================--
+
+local function updateChargeGui()
+
+	if not ChargeFill
+		or not ChargeText then
+		return
+	end
+
+	local Percent =
+		math.clamp(
+			TurboCharge,
+			0,
+			1
+		)
+
+	ChargeFill.Size =
+		UDim2.new(
+			Percent,
+			0,
+			1,
+			0
+		)
+
+	ChargeText.Text =
+		math.floor(
+			Percent * 100
+		) .. "%"
+
+	TurboButton.Text =
+		TurboReady
+		and "⚡"
+		or "🔋"
+end
+
+--========================================================--
+-- ⚡ TURBO
+--========================================================--
+
+local function stopTurbo()
+
+	TurboActive = false
+
+	if Humanoid then
+
+		Humanoid.WalkSpeed =
+			DriftEnabled
+			and DRIFT_SPEED
+			or NORMAL_SPEED
+	end
+
+	if Camera then
+
+		TweenService:Create(
+			Camera,
+			TweenInfo.new(
+				0.35,
+				Enum.EasingStyle.Quad
+			),
+			{
+				FieldOfView = NORMAL_FOV
+			}
+		):Play()
+	end
+
+	updateSmoke()
+end
+
+local function startTurbo()
+
+	if not TurboReady
+		or not CarEnabled then
+		return
+	end
+
+	if CurrentSpeed < 2 then
+		return
+	end
+
+	TurboActive = true
+
+	if Humanoid then
+		Humanoid.WalkSpeed = TURBO_SPEED
+	end
+
+	if Camera then
+
+		TweenService:Create(
+			Camera,
+			TweenInfo.new(
+				0.12,
+				Enum.EasingStyle.Quad
+			),
+			{
+				FieldOfView = TURBO_FOV
+			}
+		):Play()
+	end
+
+	updateSmoke()
+end
+
+local function useTurbo()
+
+	if TurboActive then
+		return
+	end
+
+	if not TurboReady then
+		return
+	end
+
+	startTurbo()
+end
+
+--========================================================--
+-- MOVIMENTO DO TURBO
+--========================================================--
+
+local function updateTurboMovement()
+
+	if not TurboActive
+		or not Root
+		or not Humanoid then
+		return
+	end
+
+	local MoveDirection =
+		Humanoid.MoveDirection
+
+	if MoveDirection.Magnitude < 0.05 then
+
+		stopTurbo()
+		return
+	end
+
+	local Velocity =
+		Root.AssemblyLinearVelocity
+
+	local CurrentFlat =
+		Vector3.new(
+			Velocity.X,
+			0,
+			Velocity.Z
+		)
+
+	local Target =
+		MoveDirection.Unit *
+		TURBO_SPEED
+
+	-- aceleração BEM mais suave
+	local Alpha =
+		math.clamp(
+			TURBO_ACCELERATION *
+			0.016 /
+			math.max(
+				TURBO_SPEED,
+				1
+			),
+			0.018,
+			0.06
+		)
+
+	local NewFlat =
+		CurrentFlat:Lerp(
+			Target,
+			Alpha
+		)
+
+	Root.AssemblyLinearVelocity =
+		Vector3.new(
+			NewFlat.X,
+			Velocity.Y,
+			NewFlat.Z
+		)
+end
+
+--========================================================--
+-- RECARGA
+--========================================================--
+
+local function rechargeTurbo(Delta)
+
+	if TurboActive then
+		return
+	end
+
+	if TurboCharge >= 1 then
+
+		TurboCharge = 1
+		TurboReady = true
+
+		updateChargeGui()
+		return
+	end
+
+	TurboCharge =
+		math.clamp(
+			TurboCharge +
+			Delta / TURBO_RECHARGE,
+			0,
+			1
+		)
+
+	if TurboCharge >= 1 then
+		TurboReady = true
+	end
+
+	updateChargeGui()
+end
+
+--========================================================--
+-- VELOCÍMETRO
+--========================================================--
+
+local function getGear(Speed)
+
+	if Speed < 2 then
+		return "N"
+	elseif Speed < 45 then
+		return "1"
+	elseif Speed < 100 then
+		return "2"
+	elseif Speed < 250 then
+		return "3"
+	elseif Speed < 500 then
+		return "4"
+	else
+		return "5"
+	end
+end
+
+local function updateDashboard()
+
+	if not SpeedText then
+		return
+	end
+
+	SpeedText.Text =
+		string.format(
+			"%03d",
+			math.floor(
+				math.clamp(
+					CurrentSpeed,
+					0,
+					TURBO_SPEED
+				) + 0.5
+			)
+		)
+
+	GearText.Text =
+		getGear(CurrentSpeed)
+
+	if TurboActive then
+
+		StatusText.Text = "TURBO"
+
+	elseif DriftEnabled
+		and CurrentSpeed >= DRIFT_MIN_SPEED
+		and isSharpTurn() then
+
+		StatusText.Text = "DRIFT"
+
+	elseif CurrentSpeed > 5 then
+
+		StatusText.Text = "DRIVE"
+
+	else
+
+		StatusText.Text = "IDLE"
+	end
+end
+
+--========================================================--
+-- 💥 IMPACTO
+--========================================================--
+
+local function connectImpact()
+
+	if not Root then
+		return
+	end
+
+	table.insert(
+		Connections,
+		Root.Touched:Connect(function(Hit)
+
+			if not ImpactEnabled
+				or not CarEnabled then
+				return
+			end
+
+			if CurrentSpeed < IMPACT_MIN_SPEED then
+				return
+			end
+
+			if tick() - LastImpact <
+				IMPACT_COOLDOWN then
+				return
+			end
+
+			local Model =
+				Hit:FindFirstAncestorOfClass(
+					"Model"
+				)
+
+			if not Model
+				or Model == Character then
+				return
+			end
+
+			local OtherHumanoid =
+				Model:FindFirstChildOfClass(
+					"Humanoid"
+				)
+
+			local OtherRoot =
+				Model:FindFirstChild(
+					"HumanoidRootPart"
+				)
+
+			if not OtherHumanoid
+				or not OtherRoot then
+				return
+			end
+
+			LastImpact = tick()
+
+			local Velocity =
+				Root.AssemblyLinearVelocity
+
+			local Direction =
+				Vector3.new(
+					Velocity.X,
+					0,
+					Velocity.Z
+				)
+
+			if Direction.Magnitude < 1 then
+
+				Direction =
+					Root.CFrame.LookVector
+
+				Direction =
+					Vector3.new(
+						Direction.X,
+						0,
+						Direction.Z
+					)
+			end
+
+			if Direction.Magnitude < 0.01 then
+				return
+			end
+
+			Direction =
+				Direction.Unit
+
+			local Push =
+				Direction *
+				IMPACT_FORCE *
+				math.clamp(
+					CurrentSpeed / 60,
+					0.8,
+					2
+				)
+
+			Push =
+				Push +
+				Vector3.new(
+					0,
+					IMPACT_UP_FORCE,
+					0
+				)
+
+			pcall(function()
+
+				OtherRoot:ApplyImpulse(
+					Push *
+					OtherRoot.AssemblyMass
+				)
+
+			end)
+		end)
+	)
+end
+
+--========================================================--
+-- BOTÕES
+--========================================================--
+
+local function connectButtons()
+
+	table.insert(
+		Connections,
+		DriftButton.Activated:Connect(function()
+
+			DriftEnabled =
+				not DriftEnabled
+
+			if DriftEnabled then
+
+				DriftButton.Text = "🧊"
+
+				if Humanoid
+					and not TurboActive then
+
+					Humanoid.WalkSpeed =
+						DRIFT_SPEED
+				end
+
+			else
+
+				DriftButton.Text = "❄️"
+
+				if Humanoid
+					and not TurboActive then
+
+					Humanoid.WalkSpeed =
+						NORMAL_SPEED
+				end
+
+				PreviousLeftWheel = nil
+				PreviousRightWheel = nil
+			end
+
+		end)
+	)
+
+	table.insert(
+		Connections,
+		LightButton.Activated:Connect(function()
+
+			LightEnabled =
+				not LightEnabled
+
+			updateLights()
+
+		end)
+	)
+
+	table.insert(
+		Connections,
+		CarButton.Activated:Connect(function()
+
+			CarEnabled =
+				not CarEnabled
+
+			if CarEnabled then
+
+				CarButton.Text = "🚗"
+
+				if Humanoid then
+					Humanoid.WalkSpeed =
+						NORMAL_SPEED
+				end
+
+			else
+
+				CarButton.Text = "⛔"
+
+				stopTurbo()
+
+				if Humanoid then
+					Humanoid.WalkSpeed =
+						NORMAL_SPEED
+				end
+			end
+
+			updateLights()
+			updateSmoke()
+
+		end)
+	)
+
+	table.insert(
+		Connections,
+		ImpactButton.Activated:Connect(function()
+
+			ImpactEnabled =
+				not ImpactEnabled
+
+			ImpactButton.Text =
+				ImpactEnabled
+				and "💥"
+				or "🛑"
+
+		end)
+	)
+
+	table.insert(
+		Connections,
+		TurboButton.Activated:Connect(function()
+			useTurbo()
+		end)
+	)
+end
+
+--========================================================--
+-- LOOP
+--========================================================--
+
+local function startLoop()
+
+	table.insert(
+		Connections,
+		RunService.RenderStepped:Connect(function(Delta)
+
+			if not Character
+				or not Humanoid
+				or not Root then
+				return
+			end
+
+			if Humanoid.Health <= 0 then
+				return
+			end
+
+			Camera =
+				workspace.CurrentCamera
+
+			local Velocity =
+				Root.AssemblyLinearVelocity
+
+			local Flat =
+				Vector3.new(
+					Velocity.X,
+					0,
+					Velocity.Z
+				)
+
+			CurrentSpeed =
+				Flat.Magnitude
+
+			--================================================--
+			-- TURBO
+			--================================================--
+
+			if TurboActive then
+
+				if CurrentSpeed < 3 then
+
+					stopTurbo()
+
+				else
+
+					TurboCharge =
+						TurboCharge -
+						Delta /
+						TURBO_DURATION
+
+					if TurboCharge <= 0 then
+
+						TurboCharge = 0
+						TurboReady = false
+
+						stopTurbo()
+					end
+				end
+
+			else
+
+				rechargeTurbo(Delta)
+			end
+
+			--================================================--
+			-- VELOCIDADE NORMAL
+			--================================================--
+
+			if CarEnabled
+				and not TurboActive then
+
+				if DriftEnabled then
+
+					Humanoid.WalkSpeed =
+						DRIFT_SPEED
+
+				else
+
+					Humanoid.WalkSpeed =
+						NORMAL_SPEED
+				end
+			end
+
+			--================================================--
+			-- TURBO
+			--================================================--
+
+			updateTurboMovement()
+
+			--================================================--
+			-- RÉ
+			--================================================--
+
+			updateReverseLights()
+
+			--================================================--
+			-- EFEITOS
+			--================================================--
+
+			updateSmoke()
+			updateTireTrail()
+			updateDashboard()
+			updateChargeGui()
+
+		end)
+	)
+end
+
+--========================================================--
+-- ARRASTAR GUI
+--========================================================--
+
+local function enableDragging()
+
+	local Dragging = false
+	local DragStart
+	local StartPosition
+
+	table.insert(
+		Connections,
+		Dashboard.InputBegan:Connect(function(Input)
+
+			if Input.UserInputType ==
+				Enum.UserInputType.MouseButton1
+				or Input.UserInputType ==
+				Enum.UserInputType.Touch then
+
+				Dragging = true
+				DragStart = Input.Position
+				StartPosition = Dashboard.Position
+			end
+		end)
+	)
+
+	table.insert(
+		Connections,
+		UserInputService.InputChanged:Connect(function(Input)
+
+			if not Dragging then
+				return
+			end
+
+			if Input.UserInputType ~=
+				Enum.UserInputType.MouseMovement
+				and Input.UserInputType ~=
+				Enum.UserInputType.Touch then
+				return
+			end
+
+			local Delta =
+				Input.Position -
+				DragStart
+
+			local CameraNow =
+				workspace.CurrentCamera
+
+			if not CameraNow then
+				return
+			end
+
+			local Viewport =
+				CameraNow.ViewportSize
+
+			local X =
+				StartPosition.X.Offset +
+				Delta.X
+
+			local Y =
+				StartPosition.Y.Offset +
+				Delta.Y
+
+			X =
+				math.clamp(
+					X,
+					-Viewport.X / 2 + 140,
+					Viewport.X / 2 - 140
+				)
+
+			Y =
+				math.clamp(
+					Y,
+					-Viewport.Y + 125,
+					-5
+				)
+
+			Dashboard.Position =
+				UDim2.new(
+					0.5,
+					X,
+					1,
+					Y
+				)
+		end)
+	)
+
+	table.insert(
+		Connections,
+		UserInputService.InputEnded:Connect(function(Input)
+
+			if Input.UserInputType ==
+				Enum.UserInputType.MouseButton1
+				or Input.UserInputType ==
+				Enum.UserInputType.Touch then
+
+				Dragging = false
+			end
+		end)
+	)
+end
+
+--========================================================--
+-- INICIAR
+--========================================================--
+
+local function startSystem()
+
+	disconnectAll()
+
+	CarEnabled = true
+	DriftEnabled = false
+	LightEnabled = false
+	ImpactEnabled = true
+
+	TurboActive = false
+	TurboCharge = 1
+	TurboReady = true
+
+	CurrentSpeed = 0
+
+	PreviousLeftWheel = nil
+	PreviousRightWheel = nil
+
+	getCharacter()
+	setupCharacter()
+	createGui()
+
+	HeadLightLeft,
+	HeadLightRight =
+		createLights()
+
+	createSmoke()
+	createTurboSmoke()
+
+	connectButtons()
+	connectImpact()
+	startLoop()
+	enableDragging()
+
+	updateLights()
+	updateChargeGui()
+end
+
+--========================================================--
+-- MORTE
+--========================================================--
+
+local function setupDeath()
+
+	if not Humanoid then
+		return
+	end
+
+	table.insert(
+		Connections,
+		Humanoid.Died:Connect(function()
+
+			disconnectAll()
+			destroyGui()
+			destroyEffects()
+
+			TurboActive = false
+			TurboCharge = 1
+			TurboReady = true
+
+			if workspace.CurrentCamera then
+				workspace.CurrentCamera.FieldOfView =
+					NORMAL_FOV
+			end
+		end)
+	)
+end
+
+--========================================================--
+-- COMEÇAR
+--========================================================--
+
+startSystem()
+setupDeath()
+
+--========================================================--
+-- RESPAWN
+--========================================================--
+
+Player.CharacterAdded:Connect(function()
+
+	task.wait(0.5)
+
+	startSystem()
+	setupDeath()
+
+end)
+
+print("🚗 Henrique Car System iniciado!")
+print("🧱by henrique☢️")
